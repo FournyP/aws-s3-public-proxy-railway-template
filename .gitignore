@@ -1,0 +1,5 @@
+aws-s3-public-proxy
+/proxy
+.env
+.env.local
+.DS_Store
