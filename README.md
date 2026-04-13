@@ -2,7 +2,7 @@
 
 A tiny Go HTTP proxy that publicly serves read-only objects from a private S3-compatible bucket (Railway Buckets, AWS S3, MinIO, Tigris, R2, …). No presigned URLs, no redirects — requests return `200` with the object bytes streamed through.
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/aws-s3-public-proxy)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/aws-s3-public-proxy?referralCode=C3Uv6n&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
 ## 🏗️ Architecture
 
