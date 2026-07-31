@@ -85,6 +85,6 @@ curl -X POST http://localhost:8080/some-key.png   # → 405
 - HMAC-signed URLs (`?sig=...`) if you later want revocable links
 - Put Cloudflare / Bunny / CloudFront in front for caching + DDoS protection
 
-## License
+## ⚖️ License
 
-MIT
+[MIT](LICENSE)
