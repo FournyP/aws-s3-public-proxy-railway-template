@@ -95,6 +95,29 @@ func (p *proxy) handle(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "not found", http.StatusNotFound)
 			return
 		}
+
+		// S3 reports a satisfied precondition as an error, not a response.
+		// Without this the forwarded If-None-Match / If-Match below turn every
+		// cache revalidation into a 502.
+		var ae smithy.APIError
+		if errors.As(err, &ae) {
+			switch ae.ErrorCode() {
+			case "NotModified":
+				// A 304 carries the validators but no body.
+				if v := r.Header.Get("If-None-Match"); v != "" {
+					w.Header().Set("ETag", v)
+				}
+				if p.cacheControl != "" {
+					w.Header().Set("Cache-Control", p.cacheControl)
+				}
+				w.WriteHeader(http.StatusNotModified)
+				return
+			case "PreconditionFailed":
+				http.Error(w, "precondition failed", http.StatusPreconditionFailed)
+				return
+			}
+		}
+
 		log.Printf("get object %q: %v", key, err)
 		http.Error(w, "upstream error", http.StatusBadGateway)
 		return
