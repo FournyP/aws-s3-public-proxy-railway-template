@@ -21,7 +21,8 @@ One service, one binary, one bucket. The proxy holds the S3 credentials; callers
 - **Streamed bytes, not redirects.** Works for any HTTP client (curl, fetch, server-side, mobile) — no browser required.
 - **Stable URLs.** `GET /foo/bar.jpg` always maps to key `foo/bar.jpg`. Same file = same URL forever.
 - **Forwards metadata.** `Content-Type`, `Content-Length`, `ETag`, `Last-Modified` are passed through.
-- **Conditional requests.** `If-None-Match` / `If-Match` are forwarded to S3 so CDNs and clients can cache efficiently.
+- **Conditional requests.** `If-None-Match` / `If-Match` are forwarded to S3, answering `304 Not Modified` and `412 Precondition Failed` so CDNs and clients can cache efficiently.
+- **Browser-ready CORS.** `Access-Control-Allow-Origin` on every response (errors and preflights included), with `ETag` exposed so `fetch()` can revalidate.
 - **Configurable `Cache-Control`** for CDN-friendly responses.
 - **Small, production-friendly Docker image.** Multi-stage build on distroless, non-root, ~10 MB.
 
@@ -46,6 +47,7 @@ One service, one binary, one bucket. The proxy holds the S3 credentials; callers
 | `AWS_DEFAULT_REGION` | no | Region (default `auto`). For AWS use `us-east-1`/`eu-west-3`/etc. |
 | `S3_FORCE_PATH_STYLE` | no | `true` to use path-style addressing (some MinIO setups). Default `false`. |
 | `CACHE_CONTROL` | no | `Cache-Control` header value (default `public, max-age=300`). |
+| `ACCESS_CONTROL_ALLOW_ORIGIN` | no | Allowed CORS origin (default `*`). Set a single origin to restrict browser access; empty string disables CORS headers. |
 | `PORT` | no | HTTP listen port. Railway injects this automatically (default `8080`). |
 
 ## 🧪 Run locally

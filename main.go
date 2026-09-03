@@ -15,12 +15,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
 )
 
 type proxy struct {
 	client       *s3.Client
 	bucket       string
 	cacheControl string
+	corsOrigin   string
 }
 
 func main() {
@@ -31,6 +33,7 @@ func main() {
 	secretKey := mustEnv("AWS_SECRET_ACCESS_KEY")
 	forcePathStyle := envOr("S3_FORCE_PATH_STYLE", "false") == "true"
 	cacheControl := envOr("CACHE_CONTROL", "public, max-age=300")
+	corsOrigin := envOr("ACCESS_CONTROL_ALLOW_ORIGIN", "*")
 	port := envOr("PORT", "8080")
 
 	cfg, err := awsconfig.LoadDefaultConfig(context.Background(),
@@ -46,7 +49,12 @@ func main() {
 		o.UsePathStyle = forcePathStyle
 	})
 
-	p := &proxy{client: client, bucket: bucket, cacheControl: cacheControl}
+	p := &proxy{
+		client:       client,
+		bucket:       bucket,
+		cacheControl: cacheControl,
+		corsOrigin:   corsOrigin,
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
@@ -57,7 +65,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:              ":" + port,
-		Handler:           mux,
+		Handler:           p.cors(mux),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	log.Printf("listening on :%s bucket=%s endpoint=%s", port, bucket, endpoint)
@@ -66,9 +74,43 @@ func main() {
 	}
 }
 
+// cors sets the CORS headers on every response, including 404s, 502s and
+// preflights — a handler-only implementation would leave error responses
+// unreadable to browser JS.
+func (p *proxy) cors(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if p.corsOrigin != "" {
+			h := w.Header()
+			h.Set("Access-Control-Allow-Origin", p.corsOrigin)
+			// Without this, browser JS cannot read the ETag and so cannot
+			// issue the conditional requests this proxy supports.
+			h.Set("Access-Control-Expose-Headers", "ETag, Content-Length, Content-Type, Last-Modified")
+			if p.corsOrigin != "*" {
+				// A shared cache must not serve one origin's response to another.
+				h.Add("Vary", "Origin")
+			}
+		}
+
+		if r.Method == http.MethodOptions {
+			h := w.Header()
+			h.Set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
+			if req := r.Header.Get("Access-Control-Request-Headers"); req != "" {
+				h.Set("Access-Control-Allow-Headers", req)
+			} else {
+				h.Set("Access-Control-Allow-Headers", "If-None-Match, If-Match, Range")
+			}
+			h.Set("Access-Control-Max-Age", "86400")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (p *proxy) handle(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		w.Header().Set("Allow", "GET, HEAD")
+		w.Header().Set("Allow", "GET, HEAD, OPTIONS")
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
