@@ -40,10 +40,10 @@ One service, one binary, one bucket. The proxy holds the S3 credentials; callers
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `AWS_ACCESS_KEY_ID` | yes | Access key. For Railway Buckets, reference `${{Bucket.AWS_ACCESS_KEY_ID}}`. |
-| `AWS_SECRET_ACCESS_KEY` | yes | Secret. For Railway Buckets, reference `${{Bucket.AWS_SECRET_ACCESS_KEY}}`. |
-| `AWS_S3_BUCKET_NAME` | yes | Bucket name. For Railway Buckets, reference `${{Bucket.AWS_S3_BUCKET_NAME}}`. |
-| `AWS_ENDPOINT_URL` | yes | S3 endpoint URL. For Railway Buckets, reference `${{Bucket.AWS_ENDPOINT_URL}}`. For real AWS, use `https://s3.<region>.amazonaws.com`. |
+| `AWS_ACCESS_KEY_ID` | yes | Access key. For Railway Buckets, reference `${{Bucket.ACCESS_KEY_ID}}`. |
+| `AWS_SECRET_ACCESS_KEY` | yes | Secret. For Railway Buckets, reference `${{Bucket.SECRET_ACCESS_KEY}}`. |
+| `AWS_S3_BUCKET_NAME` | yes | Bucket name. For Railway Buckets, reference `${{Bucket.BUCKET}}`. |
+| `AWS_ENDPOINT_URL` | yes | S3 endpoint URL. For Railway Buckets, reference `${{Bucket.ENDPOINT}}`. For real AWS, use `https://s3.<region>.amazonaws.com`. |
 | `AWS_DEFAULT_REGION` | no | Region (default `auto`). For AWS use `us-east-1`/`eu-west-3`/etc. |
 | `S3_FORCE_PATH_STYLE` | no | `true` to use path-style addressing (some MinIO setups). Default `false`. |
 | `CACHE_CONTROL` | no | `Cache-Control` header value (default `public, max-age=300`). |
