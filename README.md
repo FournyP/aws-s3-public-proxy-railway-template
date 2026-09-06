@@ -36,6 +36,35 @@ One service, one binary, one bucket. The proxy holds the S3 credentials; callers
    curl https://<your-proxy-domain>/path/to/file.jpg --output file.jpg
    ```
 
+## 🧱 Infrastructure as Code
+
+`.railway/railway.ts` defines the whole project — the proxy, the bucket it reads from,
+and every variable.
+
+```bash
+railway link
+npm install
+npm run plan     # read the diff before applying
+npm run apply
+railway domain --service aws-s3-public-proxy
+```
+
+Nothing to export: the proxy's credentials are references to the bucket, so they follow a
+key rotation on their own. Bucket regions are immutable — changing `region` later means a
+new bucket and a copy.
+
+Needs the Railway CLI 5.42.1 or newer: the IaC engine ships in the CLI, not in the npm
+package. If you forked this repo, change `REPO` in `railway.ts` to your own before applying.
+
+Link it to a project dedicated to this template. An apply deletes every resource **and
+every variable** the file does not declare, so from then on variables live in `railway.ts`,
+not the dashboard. Do not point it at a project created from the deploy button — the
+service names differ, and a mismatch is a delete and recreate, not a rename.
+
+## ⬆️ Upgrading
+
+Railway template updates are opt-in — an existing deployment keeps running until you apply the update. See the [changelog](CHANGELOG.md) for what each update contains.
+
 ## 🔧 Variables
 
 | Variable | Required | Description |

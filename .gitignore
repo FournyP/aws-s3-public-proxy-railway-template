@@ -3,3 +3,5 @@ aws-s3-public-proxy
 .env
 .env.local
 .DS_Store
+node_modules/
+.claude/settings.local.json
