@@ -21,7 +21,8 @@ One service, one binary, one bucket. The proxy holds the S3 credentials; callers
 - **Streamed bytes, not redirects.** Works for any HTTP client (curl, fetch, server-side, mobile) — no browser required.
 - **Stable URLs.** `GET /foo/bar.jpg` always maps to key `foo/bar.jpg`. Same file = same URL forever.
 - **Forwards metadata.** `Content-Type`, `Content-Length`, `ETag`, `Last-Modified` are passed through.
-- **Conditional requests.** `If-None-Match` / `If-Match` are forwarded to S3 so CDNs and clients can cache efficiently.
+- **Conditional requests.** `If-None-Match` / `If-Match` are forwarded to S3, answering `304 Not Modified` and `412 Precondition Failed` so CDNs and clients can cache efficiently.
+- **Browser-ready CORS.** `Access-Control-Allow-Origin` on every response (errors and preflights included), with `ETag` exposed so `fetch()` can revalidate.
 - **Configurable `Cache-Control`** for CDN-friendly responses.
 - **Small, production-friendly Docker image.** Multi-stage build on distroless, non-root, ~10 MB.
 
@@ -35,17 +36,47 @@ One service, one binary, one bucket. The proxy holds the S3 credentials; callers
    curl https://<your-proxy-domain>/path/to/file.jpg --output file.jpg
    ```
 
+## 🧱 Infrastructure as Code
+
+`.railway/railway.ts` defines the whole project — the proxy, the bucket it reads from,
+and every variable.
+
+```bash
+railway link
+npm install
+npm run plan     # read the diff before applying
+npm run apply
+railway domain --service aws-s3-public-proxy
+```
+
+Nothing to export: the proxy's credentials are references to the bucket, so they follow a
+key rotation on their own. Bucket regions are immutable — changing `region` later means a
+new bucket and a copy.
+
+Needs the Railway CLI 5.42.1 or newer: the IaC engine ships in the CLI, not in the npm
+package. If you forked this repo, change `REPO` in `railway.ts` to your own before applying.
+
+Link it to a project dedicated to this template. An apply deletes every resource **and
+every variable** the file does not declare, so from then on variables live in `railway.ts`,
+not the dashboard. Do not point it at a project created from the deploy button — the
+service names differ, and a mismatch is a delete and recreate, not a rename.
+
+## ⬆️ Upgrading
+
+Railway template updates are opt-in — an existing deployment keeps running until you apply the update. See the [changelog](CHANGELOG.md) for what each update contains.
+
 ## 🔧 Variables
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `AWS_ACCESS_KEY_ID` | yes | Access key. For Railway Buckets, reference `${{Bucket.AWS_ACCESS_KEY_ID}}`. |
-| `AWS_SECRET_ACCESS_KEY` | yes | Secret. For Railway Buckets, reference `${{Bucket.AWS_SECRET_ACCESS_KEY}}`. |
-| `AWS_S3_BUCKET_NAME` | yes | Bucket name. For Railway Buckets, reference `${{Bucket.AWS_S3_BUCKET_NAME}}`. |
-| `AWS_ENDPOINT_URL` | yes | S3 endpoint URL. For Railway Buckets, reference `${{Bucket.AWS_ENDPOINT_URL}}`. For real AWS, use `https://s3.<region>.amazonaws.com`. |
+| `AWS_ACCESS_KEY_ID` | yes | Access key. For Railway Buckets, reference `${{Bucket.ACCESS_KEY_ID}}`. |
+| `AWS_SECRET_ACCESS_KEY` | yes | Secret. For Railway Buckets, reference `${{Bucket.SECRET_ACCESS_KEY}}`. |
+| `AWS_S3_BUCKET_NAME` | yes | Bucket name. For Railway Buckets, reference `${{Bucket.BUCKET}}`. |
+| `AWS_ENDPOINT_URL` | yes | S3 endpoint URL. For Railway Buckets, reference `${{Bucket.ENDPOINT}}`. For real AWS, use `https://s3.<region>.amazonaws.com`. |
 | `AWS_DEFAULT_REGION` | no | Region (default `auto`). For AWS use `us-east-1`/`eu-west-3`/etc. |
 | `S3_FORCE_PATH_STYLE` | no | `true` to use path-style addressing (some MinIO setups). Default `false`. |
 | `CACHE_CONTROL` | no | `Cache-Control` header value (default `public, max-age=300`). |
+| `ACCESS_CONTROL_ALLOW_ORIGIN` | no | Allowed CORS origin (default `*`). Set a single origin to restrict browser access; empty string disables CORS headers. |
 | `PORT` | no | HTTP listen port. Railway injects this automatically (default `8080`). |
 
 ## 🧪 Run locally
@@ -85,6 +116,6 @@ curl -X POST http://localhost:8080/some-key.png   # → 405
 - HMAC-signed URLs (`?sig=...`) if you later want revocable links
 - Put Cloudflare / Bunny / CloudFront in front for caching + DDoS protection
 
-## License
+## ⚖️ License
 
-MIT
+[MIT](LICENSE)

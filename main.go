@@ -65,7 +65,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:              ":" + port,
-		Handler:           p.corsMiddleware(mux),
+		Handler:           p.cors(mux),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	log.Printf("listening on :%s bucket=%s endpoint=%s", port, bucket, endpoint)
@@ -74,23 +74,32 @@ func main() {
 	}
 }
 
-// corsMiddleware guarantees CORS headers are injected on EVERY response,
-// including errors (404, 502) and OPTIONS preflights.
-func (p *proxy) corsMiddleware(next http.Handler) http.Handler {
+// cors sets the CORS headers on every response, including 404s, 502s and
+// preflights — a handler-only implementation would leave error responses
+// unreadable to browser JS.
+func (p *proxy) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if p.corsOrigin != "" {
-			w.Header().Set("Access-Control-Allow-Origin", p.corsOrigin)
+			h := w.Header()
+			h.Set("Access-Control-Allow-Origin", p.corsOrigin)
+			// Without this, browser JS cannot read the ETag and so cannot
+			// issue the conditional requests this proxy supports.
+			h.Set("Access-Control-Expose-Headers", "ETag, Content-Length, Content-Type, Last-Modified")
+			if p.corsOrigin != "*" {
+				// A shared cache must not serve one origin's response to another.
+				h.Add("Vary", "Origin")
+			}
 		}
 
 		if r.Method == http.MethodOptions {
-			w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
-			
-			if reqHeaders := r.Header.Get("Access-Control-Request-Headers"); reqHeaders != "" {
-				w.Header().Set("Access-Control-Allow-Headers", reqHeaders)
+			h := w.Header()
+			h.Set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
+			if req := r.Header.Get("Access-Control-Request-Headers"); req != "" {
+				h.Set("Access-Control-Allow-Headers", req)
 			} else {
-				w.Header().Set("Access-Control-Allow-Headers", "If-None-Match, If-Match, Range, sentry-trace, baggage")
+				h.Set("Access-Control-Allow-Headers", "If-None-Match, If-Match, Range")
 			}
-
+			h.Set("Access-Control-Max-Age", "86400")
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
@@ -134,6 +143,24 @@ func (p *proxy) handle(w http.ResponseWriter, r *http.Request) {
 		if errors.As(err, &ae) {
 			if ae.ErrorCode() == "NotModified" {
 				w.WriteHeader(http.StatusNotModified)
+				return
+        
+      // S3 reports a satisfied precondition as an error, not a response.
+      // Without this the forwarded If-None-Match / If-Match below turn every
+      // cache revalidation into a 502.		
+			switch ae.ErrorCode() {
+			case "NotModified":
+				// A 304 carries the validators but no body.
+				if v := r.Header.Get("If-None-Match"); v != "" {
+					w.Header().Set("ETag", v)
+				}
+				if p.cacheControl != "" {
+					w.Header().Set("Cache-Control", p.cacheControl)
+				}
+				w.WriteHeader(http.StatusNotModified)
+				return
+			case "PreconditionFailed":
+				http.Error(w, "precondition failed", http.StatusPreconditionFailed)
 				return
 			}
 		}
