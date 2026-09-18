@@ -24,6 +24,10 @@ export default defineRailway(() => {
     build: { builder: "DOCKERFILE", dockerfilePath: "Dockerfile" },
     deploy: { healthcheckPath: "/health" },
     env: {
+      // The port the proxy binds. Pinned so the domain's target port and the
+      // port Railway dials cannot disagree, which reads as "connection refused".
+      PORT: "8080",
+
       // Buckets expose no typed refs to the DSL, so these are literal ones. The
       // names on the right are Railway's, not the AWS SDK's: BUCKET is the S3
       // name, RAILWAY_BUCKET_NAME is the display name and will not work.

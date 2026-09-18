@@ -77,7 +77,7 @@ Railway template updates are opt-in — an existing deployment keeps running unt
 | `S3_FORCE_PATH_STYLE` | no | `true` to use path-style addressing (some MinIO setups). Default `false`. |
 | `CACHE_CONTROL` | no | `Cache-Control` header value (default `public, max-age=300`). |
 | `ACCESS_CONTROL_ALLOW_ORIGIN` | no | Allowed CORS origin (default `*`). Set a single origin to restrict browser access; empty string disables CORS headers. |
-| `PORT` | no | HTTP listen port. Railway injects this automatically (default `8080`). |
+| `PORT` | no | HTTP listen port, default `8080`. The IaC file pins it; Railway injects a random value when unset, which must then match the domain's target port. |
 
 ## 🧪 Run locally
 
