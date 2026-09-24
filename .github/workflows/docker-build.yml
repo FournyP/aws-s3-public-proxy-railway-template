@@ -1,5 +1,5 @@
 # Vets and builds the proxy on every PR and on main, then boots the real image
-# against a MinIO bucket to check the S3 path end to end.
+# against a local S3 bucket to check the S3 path end to end.
 name: docker-build
 
 on:
@@ -37,7 +37,8 @@ jobs:
           cache-to: type=gha,mode=max,scope=proxy
 
   # The proxy only earns its keep if it actually speaks SigV4 to a real bucket,
-  # which the image build cannot show. MinIO stands in for Railway Buckets.
+  # which the image build cannot show. Versity's S3 gateway stands in for Railway
+  # Buckets; it verifies SigV4 like the real thing. MinIO no longer publishes images.
   proxy-behaviour:
     runs-on: ubuntu-latest
     steps:
@@ -53,25 +54,28 @@ jobs:
           tags: proxy:ci
           cache-from: type=gha,scope=proxy
 
-      - name: Start MinIO with an object in it
+      - name: Start an S3 gateway with an object in it
         run: |
           set -eu
           docker network create ci-net
-          docker run -d --name minio --network ci-net \
-            -e MINIO_ROOT_USER=ciaccesskey \
-            -e MINIO_ROOT_PASSWORD=cisecretkey \
+          docker run -d --name s3gw --network ci-net \
+            -e ROOT_ACCESS_KEY=ciaccesskey \
+            -e ROOT_SECRET_KEY=cisecretkey \
             -p 9000:9000 \
-            quay.io/minio/minio server /data
+            versity/versitygw:v1.8.0 --port :9000 posix /tmp/vgw
+          # Any HTTP answer means it is up; anonymous requests get a 403.
           for i in $(seq 1 30); do
-            curl -fsS http://localhost:9000/minio/health/live >/dev/null 2>&1 && break
+            curl -s -o /dev/null http://localhost:9000/ && break
             sleep 1
           done
           printf 'hello from the bucket\n' > object.txt
-          docker run --rm --network ci-net -v "$PWD:/w" -w /w --entrypoint sh \
-            quay.io/minio/mc -c '
-              mc alias set ci http://minio:9000 ciaccesskey cisecretkey &&
-              mc mb ci/public &&
-              mc cp object.txt ci/public/dir/object.txt'
+          docker run --rm --network ci-net -v "$PWD:/w" -w /w \
+            -e AWS_ACCESS_KEY_ID=ciaccesskey \
+            -e AWS_SECRET_ACCESS_KEY=cisecretkey \
+            -e AWS_DEFAULT_REGION=us-east-1 \
+            --entrypoint sh amazon/aws-cli:2.37.2 -c '
+              aws --endpoint-url http://s3gw:9000 s3 mb s3://public &&
+              aws --endpoint-url http://s3gw:9000 s3 cp object.txt s3://public/dir/object.txt'
 
       - name: Start proxy
         run: |
@@ -80,7 +84,7 @@ jobs:
             -e AWS_ACCESS_KEY_ID=ciaccesskey \
             -e AWS_SECRET_ACCESS_KEY=cisecretkey \
             -e AWS_S3_BUCKET_NAME=public \
-            -e AWS_ENDPOINT_URL=http://minio:9000 \
+            -e AWS_ENDPOINT_URL=http://s3gw:9000 \
             -e AWS_DEFAULT_REGION=us-east-1 \
             -e S3_FORCE_PATH_STYLE=true \
             -e PORT=8080 \
@@ -121,4 +125,4 @@ jobs:
         if: failure()
         run: |
           docker logs proxy || true
-          docker logs minio || true
+          docker logs s3gw || true
